@@ -1,11 +1,11 @@
 node{
      
     stage('SCM Checkout'){
-        git url: 'https://github.com/MithunTechnologiesDevOps/java-web-app-docker.git',branch: 'master'
+        git url: 'https://github.com/sn0005/java-web-app-docker.git',branch: 'master'
     }
     
     stage(" Maven Clean Package"){
-      def mavenHome =  tool name: "Maven-3.5.6", type: "maven"
+      def mavenHome =  tool name: "Maven-3.6.3", type: "maven"
       def mavenCMD = "${mavenHome}/bin/mvn"
       sh "${mavenCMD} clean package"
       
@@ -17,24 +17,30 @@ node{
     }
     
     stage('Push Docker Image'){
-        withCredentials([string(credentialsId: 'Docker_Hub_Pwd', variable: 'Docker_Hub_Pwd')]) {
-          sh "docker login -u dockerhandson -p ${Docker_Hub_Pwd}"
+        withCredentials([string(credentialsId: 'dockerhub_key', variable: 'DockerHub_key')]) {
+          sh "docker login -u sn0005 -p ${DockerHub_key}"
         }
-        sh 'docker push dockerhandson/java-web-app'
+        sh 'docker push sn0005/java-web-app'
      }
      
-      stage('Run Docker Image In Dev Server'){
-        
-        def dockerRun = ' docker run  -d -p 8080:8080 --name java-web-app dockerhandson/java-web-app'
-         
-         sshagent(['DOCKER_SERVER']) {
-          sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.20.72 docker stop java-web-app || true'
-          sh 'ssh  ubuntu@172.31.20.72 docker rm java-web-app || true'
-          sh 'ssh  ubuntu@172.31.20.72 docker rmi -f  $(docker images -q) || true'
-          sh "ssh  ubuntu@172.31.20.72 ${dockerRun}"
-       }
-       
-    }
-     
-     
+     stage('SSH into machine') {
+          steps {
+               withCredentials([usernamePassword(credentialsId: 'webserver_login', usernameVariable: 'USERNAME', passwordVariable: 'USERPASS')]) {
+                    sshPublisher(
+                         failonError: true,
+                         continueOnError: false,
+                         publishers: [
+                              sshPublisherDesc(
+                                   configName: jenkinsserver,
+                                   sshCredentials: [
+                                        username: "$USERNAME",
+                                        encryptedPassphrase: "$USERPASS"
+                                        ],
+                                   {sh "docker run  -d -p 8080:8080 --name java-web-app sn0005/java-web-app" }
+                                    )
+                              ]
+                         )
+               }
+          }
+     }
 }
